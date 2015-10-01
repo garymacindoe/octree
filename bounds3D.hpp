@@ -89,38 +89,6 @@ std::ostream & operator<<(std::ostream & os, const bounds3D<T> & bounds) {
                        std::setw(w) << bounds.zmax() << " }";
 }
 
-/*!
- * Returns `true` if the point is contained within the bounds.  This function
- * treats the bounds as a closed-open interval along each dimension (i.e. the
- * point is considered to be within the bounds if for each dimension x, y and z
- * the expression `xmin <= x < xmax` evaluates as `true`).
- *
- * \param bounds  the bounds
- * \param point   the point
- *
- * \returns `true` if the point is within the bounds, `false` otherwise.
- */
-template <class T>
-inline bool contains(const bounds3D<T> & bounds, const vector3D<T> & point) {
-  return point.x() >= bounds.xmin() && point.x() < bounds.xmax() &&
-         point.y() >= bounds.ymin() && point.y() < bounds.ymax() &&
-         point.z() >= bounds.zmin() && point.z() < bounds.zmax();
-}
-
-/*!
- * Calculates the centre of the bounding box.
- *
- * \param bounds  the bounding box
- *
- * \return a `vector3D` containing the coordinates of the centre.
- */
-template <class T>
-inline vector3D<T> centre(const bounds3D<T> & bounds) {
-  return vector3D<T>((bounds.xmin() + bounds.xmax()) / 2.0,
-                     (bounds.ymin() + bounds.ymax()) / 2.0,
-                     (bounds.zmin() + bounds.zmax()) / 2.0);
-}
-
 }       // namespace octree
 
 #endif  // OCTREE_BOUNDS3D_HPP
