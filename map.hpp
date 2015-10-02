@@ -149,10 +149,12 @@ public:
    * `difference_type` */
   typedef std::make_unsigned<difference_type> size_type;
 
-  explicit map(const volume_contains & = volume_contains(),
+  explicit map(const volume_type & = volume_type(),
+               const mapped_type & = mapped_type(),
+               const mapped_type & = mapped_type(),
+               const volume_contains & = volume_contains(),
                const volume_centre & = volume_centre(),
                const allocator_type & = allocator_type());
-  explicit map(const allocator_type &);
 
   map(const map &);
   map(const map &, const allocator_type &);
