@@ -211,6 +211,36 @@ template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
 void swap(map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
           map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
 
+template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
+          class Alloc>
+bool operator==(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+
+template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
+          class Alloc>
+bool operator!=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+
+template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
+          class Alloc>
+bool operator<(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
+               const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+
+template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
+          class Alloc>
+bool operator<=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+
+template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
+          class Alloc>
+bool operator>(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
+               const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+
+template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
+          class Alloc>
+bool operator>=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+
 }       // namespace octree
 
 #endif
