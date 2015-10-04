@@ -86,6 +86,29 @@ template <class Vector3D, class Bounds3D, class T,
           class Centre = centre<Bounds3D, Vector3D>,
           class Alloc = std::allocator<std::pair<const Bounds3D, T>>>
 class map {
+
+  /*!
+   * Inner class representing a node in the octree.
+   *
+   * \param Value the type of the values stored in the octree.
+   */
+  template <class Value>
+  struct octree_node {
+
+    octree_node(const Value & v, octree_node * p = nullptr) :
+        parent(p), value(v) {
+      for (int i = 0; i != 8; ++i)
+        children[i] = nullptr;
+    }
+
+    /*! Pointers to parent node and children. */
+    octree_node * parent, * children[8];
+
+    /*! The value stored in this node. */
+    Value value;
+
+  };
+
 public:
 
   /*! The first template parameter (`Vector3D`) */
