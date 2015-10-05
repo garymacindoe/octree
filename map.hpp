@@ -6,6 +6,7 @@
 #include <iterator>
 #include <type_traits>
 #include <stack>
+#include <stdexcept>
 
 namespace octree {
 
@@ -201,6 +202,65 @@ class map {
 
   };
 
+  template <class Value, class Pointer, class Reference>
+  class octree_cursor {
+  public:
+    typedef Value value_type;
+    typedef Pointer pointer;
+    typedef Reference reference;
+
+    octree_cursor(octree_node<Value> * root) : _current(root) {}
+
+    reference operator*() const {
+      return _current->value;
+    }
+
+    pointer operator->() const {
+      return &_current->value;
+    }
+
+    void to_parent() {
+      _current = _current->parent;
+    }
+
+    void to_child(std::size_t i) {
+      if (i >= 8)
+        throw std::out_of_range("octree::map::cursor::to_child(): invalid "
+                                "child index >= 8");
+      _current = _current->children[i];
+    }
+
+    bool is_root() const {
+      return _current->parent == nullptr;
+    }
+
+    bool is_leaf() const {
+      return _current->children[0] == nullptr;
+    }
+
+    friend bool operator==(const octree_cursor & lhs,
+                           const octree_cursor & rhs) {
+      return lhs._current == rhs._current;
+    }
+
+    friend bool operator!=(const octree_cursor & lhs,
+                           const octree_cursor & rhs) {
+      return !(lhs == rhs);
+    }
+
+  private:
+
+    /*!
+     * Friends with map so that divide() and collapse() can access the node
+     * referenced.
+     */
+    friend class map;
+
+    /*! The current node (possibly null) */
+    octree_node<Value> * _current;
+
+  };
+
 public:
 
   /*! The first template parameter (`Vector3D`) */
@@ -245,10 +305,11 @@ public:
                         const_reference> const_iterator;
 
   /*! A tree cursor to `value_type` */
-  typedef T * cursor;
+  typedef octree_cursor<value_type, pointer, reference> cursor;
 
   /*! A tree cursor to `const value_type` */
-  typedef const T * const_cursor;
+  typedef octree_cursor<value_type, const_pointer,
+                        const_reference> const_cursor;
 
   /*! `std::reverse_iterator<iterator>` */
   typedef std::reverse_iterator<iterator> reverse_iterator;
@@ -430,13 +491,19 @@ public:
    * methods instead of the `operator++()` and `operator--()` methods provided
    * by iterators.
    */
-  cursor root() noexcept;
-  const_cursor root() const noexcept;
+  cursor root() noexcept {
+    return cursor(&_root);
+  }
+  const_cursor root() const noexcept {
+    return const_cursor(&_root);
+  }
 
   /*!
    * Returns a `const_cursor` pointing to the root node of the octree.
    */
-  const_cursor croot() const noexcept;
+  const_cursor croot() const noexcept {
+    return const_cursor(&_root);
+  }
 
 
   /*!
