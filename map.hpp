@@ -5,6 +5,7 @@
 #include <utility>
 #include <iterator>
 #include <type_traits>
+#include <stack>
 
 namespace octree {
 
@@ -109,6 +110,97 @@ class map {
 
   };
 
+  template <class Value, class Pointer, class Reference>
+  class leaf_iterator :
+      public std::iterator<std::bidirectional_iterator_tag, Value,
+                           std::ptrdiff_t, Pointer, Reference> {
+  public:
+    leaf_iterator(octree_node<Value> * current = nullptr,
+                  const std::stack<std::size_t> & path =
+                           std::stack<std::size_t>()) :
+        _current(current), _path(path) {}
+
+    Reference operator*() const {
+      return _current->value;
+    }
+
+    Pointer operator->() const {
+      return &_current->value;
+    }
+
+    leaf_iterator & operator++() {
+      _current = _current->parent;
+      while (_current != nullptr && _path.top() == 7) {
+        _path.pop();
+        _current = _current->parent;
+      }
+      if (_current != nullptr) {
+        _current = _current->children[++_path.top()];
+        while (_current->children[0] != nullptr) {
+          _path.push(0);
+          _current = _current->children[0];
+        }
+      }
+      return *this;
+    }
+
+    leaf_iterator & operator--() {
+      _current = _current->parent;
+      while (_current != nullptr && _path.top() == 0) {
+        _path.pop();
+        _current = _current->parent;
+      }
+      if (_current != nullptr) {
+        _current = _current->children[--_path.top()];
+        while (_current->children[7] != nullptr) {
+          _path.push(7);
+          _current = _current->children[7];
+        }
+      }
+      return *this;
+    }
+
+    leaf_iterator & operator++(int) {
+      leaf_iterator copy(*this);
+      operator++();
+      return copy;
+    }
+
+    leaf_iterator & operator--(int) {
+      leaf_iterator copy(*this);
+      operator--();
+      return copy;
+    }
+
+    friend bool operator==(const leaf_iterator & lhs,
+                           const leaf_iterator & rhs) {
+      return lhs._current == rhs._current && lhs._path == rhs._path;
+    }
+
+    friend bool operator!=(const leaf_iterator & lhs,
+                           const leaf_iterator & rhs) {
+      return !(lhs == rhs);
+    }
+
+  private:
+
+    /*!
+     * Friends with map so that divide() and collapse() can access the node
+     * referenced.
+     */
+    friend class map;
+
+    /*! The current node (possibly null) */
+    octree_node<Value> * _current;
+
+    /*!
+     * The indices of the child nodes visited on the path from the root node to
+     * the current node.
+     */
+    std::stack<std::size_t> _path;
+
+  };
+
 public:
 
   /*! The first template parameter (`Vector3D`) */
@@ -146,10 +238,11 @@ public:
       const_pointer;
 
   /*! A bidirectional iterator to `value_type` */
-  typedef T * iterator;
+  typedef leaf_iterator<value_type, pointer, reference> iterator;
 
   /*! A bidirectional iterator to `const value_type` */
-  typedef const T * const_iterator;
+  typedef leaf_iterator<value_type, const_pointer,
+                        const_reference> const_iterator;
 
   /*! A tree cursor to `value_type` */
   typedef T * cursor;
@@ -245,52 +338,88 @@ public:
   /*!
    * Returns an iterator pointing to the first element in the map.
    */
-  iterator begin() noexcept;
-  const_iterator begin() const noexcept;
+  iterator begin() noexcept {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = first(&_root, path);
+    return iterator(node, path);
+  }
+  const_iterator begin() const noexcept {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = first(&_root, path);
+    return const_iterator(node, path);
+  }
 
   /*!
    * Returns an iterator pointing to one-past-the-end element in the map.
    *
    * The value returned shall not be dereferenced.
    */
-  iterator end() noexcept;
-  const_iterator end() const noexcept;
+  iterator end() noexcept {
+    return iterator();
+  }
+  const_iterator end() const noexcept {
+    return const_iterator();
+  }
 
   /*!
    * Returns a reverse iterator pointing to the last element in the map.
    */
-  reverse_iterator rbegin() noexcept;
-  const_reverse_iterator rbegin() const noexcept;
+  reverse_iterator rbegin() noexcept {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = last(&_root, path);
+    return reverse_iterator(node, path);
+  }
+  const_reverse_iterator rbegin() const noexcept {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = last(&_root, path);
+    return const_reverse_iterator(node, path);
+  }
 
   /*!
    * Returns a reverse iterator pointing to the theoretical element right before
    * the first element in the map.
    */
-  reverse_iterator rend() noexcept;
-  const_reverse_iterator rend() const noexcept;
+  reverse_iterator rend() noexcept {
+    return reverse_iterator();
+  }
+  const_reverse_iterator rend() const noexcept {
+    return const_reverse_iterator();
+  }
 
   /*!
    * Returns a `const_iterator` pointing to the first element in the map.
    */
-  const_iterator cbegin() const noexcept;
+  const_iterator cbegin() const noexcept {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = first(&_root, path);
+    return const_iterator(node, path);
+  }
 
   /*!
    * Returns a `const_iterator` pointing to one-past-the-end element in the map.
    *
    * The value returned shall not be dereferenced.
    */
-  const_iterator cend() const noexcept;
+  const_iterator cend() const noexcept {
+    return const_iterator();
+  }
 
   /*!
    * Returns a `const_reverse_iterator` pointing to the last element in the map.
    */
-  const_reverse_iterator crbegin() const noexcept;
+  const_reverse_iterator crbegin() const noexcept {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = last(&_root, path);
+    return const_reverse_iterator(node, path);
+  }
 
   /*!
    * Returns a `const_reverse_iterator` pointing to the theoretical element
    * right before the first element in the map.
    */
-  const_reverse_iterator crend() const noexcept;
+  const_reverse_iterator crend() const noexcept {
+    return const_reverse_iterator();
+  }
 
   /*!
    * Returns a cursor pointing to the root node of the octree.
@@ -426,6 +555,27 @@ public:
    * \return the allocator.
    */
   allocator_type get_allocator() const noexcept;
+
+private:
+
+  static octree_node<value_type> * first(octree_node<value_type> * node,
+                                         std::stack<std::size_t> & path) {
+    while (node->children[0] != nullptr) {
+      node = node->children[0];
+      path.push(0);
+    }
+    return node;
+  }
+
+  static octree_node<value_type> * last(octree_node<value_type> * node,
+                                        std::stack<std::size_t> & path) {
+    while (node->children[7] != nullptr) {
+      node = node->children[7];
+      path.push(7);
+    }
+    return node;
+  }
+
 };
 
 /*!
