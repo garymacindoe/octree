@@ -554,10 +554,30 @@ public:
    *
    * \return the mapped value for the bounds containing point `p`.
    */
-  mapped_type & operator[](const point_type &);
-  const mapped_type & operator[](const point_type &) const;
-  mapped_type & at(const point_type &);
-  const mapped_type & at(const point_type &) const;
+  mapped_type & operator[](const point_type & p) {
+    octree_node<value_type> * node = locate(p);
+    if (node == nullptr)
+      throw std::out_of_range("octree::map::operator[]: point out of range");
+    return node->second;
+  }
+  const mapped_type & operator[](const point_type & p) const {
+    octree_node<value_type> * node = locate(p);
+    if (node == nullptr)
+      throw std::out_of_range("octree::map::operator[]: point out of range");
+    return node->second;
+  }
+  mapped_type & at(const point_type & p) {
+    octree_node<value_type> * node = locate(p);
+    if (node == nullptr)
+      throw std::out_of_range("octree::map::at(): point out of range");
+    return node->second;
+  }
+  const mapped_type & at(const point_type & p) const  {
+    octree_node<value_type> * node = locate(p);
+    if (node == nullptr)
+      throw std::out_of_range("octree::map::at(): point out of range");
+    return node->second;
+  }
 
 
   /*!
@@ -607,8 +627,16 @@ public:
    * \return an iterator to the node containing point `p`, or `map::end` if the
    *           point is not within the bounds of the map.
    */
-  iterator find(const point_type &);
-  const_iterator find(const point_type &) const;
+  iterator find(const point_type & p) {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = locate(p, path);
+    return iterator(node, path);
+  }
+  const_iterator find(const point_type & p) const {
+    std::stack<std::size_t> path;
+    octree_node<value_type> * node = locate(p, path);
+    return const_iterator(node, path);
+  }
 
   /*!
    * Searches the map for nodes containing point `p` and returns the number of
@@ -650,6 +678,68 @@ private:
       node = node->children[7];
       path.push(7);
     }
+    return node;
+  }
+
+  octree_node<value_type> * locate(const point_type & point,
+                                   std::stack<std::size_t> & path) const {
+    // If the point is not contained in the bounds of the root node it's not
+    // going to be in any of the sub-nodes either
+    if (!_contains(_root.value.first, point))
+      return nullptr;
+
+    // While node is not a leaf (if the first child is null they're all null)
+    octree_node<value_type> * node = &_root;
+    while (node->children[0] != nullptr) {
+      // Find centre of node
+      const Vector3D centre = _centre(node->value.first);
+
+      // Work out the index of the octant in which the point lies
+      std::size_t i = 0;
+      if (point.x() >= centre.x())
+        i |= 1;
+      if (point.y() >= centre.y())
+        i |= 1 << 1;
+      if (point.z() >= centre.z())
+        i |= 1 << 2;
+
+      // Go to the correct child octant
+      node = node->children[i];
+
+      // Update the path taken
+      path.push(i);
+    }
+
+    // Return the (leaf) node containing the point
+    return node;
+  }
+
+  octree_node<value_type> * locate(const point_type & point) const {
+    // If the point is not contained in the bounds of the root node it's not
+    // going to be in any of the sub-nodes either
+    if (!_contains(_root.value.first, point))
+      return nullptr;
+
+    // While node is not a leaf (if the first child is null they're all null)
+    octree_node<value_type> * node = &_root;
+    while (node->children[0] != nullptr) {
+      // Find centre of node
+      const Vector3D centre = _centre(node->value.first);
+
+      // Work out the index of the octant in which the point lies
+      std::size_t i = 0;
+      if (point.x() >= centre.x())
+        i |= 1;
+      if (point.y() >= centre.y())
+        i |= 1 << 1;
+      if (point.z() >= centre.z())
+        i |= 1 << 2;
+
+      // Go to the correct child octant
+      node = node->children[i];
+    }
+
+    // Return the (leaf) node containing the point
     return node;
   }
 
