@@ -513,7 +513,9 @@ public:
    *
    * \return `false`.
    */
-  bool empty() const noexcept;
+  bool empty() const noexcept {
+    return false;
+  }
 
   /*!
    * Returns the number of elements in the map.  Since the octree will always
@@ -522,7 +524,9 @@ public:
    *
    * \return the number of elements in the map (greater than or equal to `1`).
    */
-  size_type size() const noexcept;
+  size_type size() const noexcept {
+    return _n;
+  }
 
   /*!
    * Returns the maximum number of elements this map can hold.
@@ -534,7 +538,9 @@ public:
    *
    * \return the maximum number of elements a map can hold as content.
    */
-  size_type max_size() const noexcept;
+  size_type max_size() const noexcept {
+    return std::allocator_traits<allocator_type>::max_size(_allocator);
+  }
 
 
   /*!
@@ -613,7 +619,9 @@ public:
    *
    * \return `1` if the point is within the bounds of the map, `0` otherwise.
    */
-  size_type count(const point_type &) const;
+  size_type count(const point_type & p) const {
+    return (_contains(_root.value.first, p)) ? 1 : 0;
+  }
 
 
   /*!
@@ -621,7 +629,9 @@ public:
    *
    * \return the allocator.
    */
-  allocator_type get_allocator() const noexcept;
+  allocator_type get_allocator() const noexcept {
+    return _allocator;
+  }
 
 private:
 
