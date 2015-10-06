@@ -112,6 +112,15 @@ class map {
 
   };
 
+  template <class Value>
+  void swap(octree_node<Value> & x, octree_node<Value> & y) {
+    using std::swap;
+    swap(x.value, y.value);
+    swap(x.parent, y.parent);
+    for (int i = 0; i != 8; ++i)
+      swap(x.children[i], y.children[i]);
+  }
+
   template <class Value, class Pointer, class Reference>
   class leaf_iterator :
       public std::iterator<std::bidirectional_iterator_tag, Value,
@@ -612,7 +621,14 @@ public:
    * \param x  another map of the same type as this whose content is swapped
    *             with that of this map.
    */
-  void swap(map &);
+  void swap(map & x) {
+    using std::swap;
+    swap(_root, x._root);
+    swap(_n, x._n);
+    swap(_contains, x._contains);
+    swap(_centre, x._centre);
+    swap(_allocator, x._allocator);
+  }
 
   /*!
    * Removes all children of the root node, leaving this map with a size of `1`.
