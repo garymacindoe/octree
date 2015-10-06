@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <stack>
 #include <stdexcept>
+#include <algorithm>
 
 namespace octree {
 
@@ -763,8 +764,10 @@ private:
  */
 template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
           class Alloc>
-void swap(map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
-          map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+void swap(map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & x,
+          map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & y) {
+  x.swap(y);
+}
 
 /*!
  * Compares two maps for size and, if equal, compares each element sequentially
@@ -779,8 +782,11 @@ void swap(map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
  */
 template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
           class Alloc>
-bool operator==(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
-                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+bool operator==(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & lhs,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & rhs) {
+  return lhs.size() == rhs.size() &&
+         std::equal(lhs.cbegin(), lhs.cend(), rhs.cbegin());
+}
 
 /*!
  * Compares two maps for inequality.  Equivalent to the expression
@@ -794,8 +800,10 @@ bool operator==(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
  */
 template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
           class Alloc>
-bool operator!=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
-                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+bool operator!=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & lhs,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & rhs) {
+  return !(lhs == rhs);
+}
 
 /*!
  * Behaves equivalently to the algorithm `lexicographical_compare` using
@@ -808,8 +816,11 @@ bool operator!=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
  */
 template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
           class Alloc>
-bool operator<(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
-               const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+bool operator<(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & lhs,
+               const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & rhs) {
+  return std::lexicographical_compare(lhs.cbegin(), lhs.cend(),
+                                      rhs.cbegin(), rhs.cend());
+}
 
 /*!
  * Equivalent to the expression `!(rhs < lhs)`.
@@ -822,8 +833,10 @@ bool operator<(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
  */
 template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
           class Alloc>
-bool operator<=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
-                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+bool operator<=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & lhs,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & rhs) {
+  return !(rhs < lhs);
+}
 
 /*!
  * Equivalent to the expression `rhs < lhs`.
@@ -835,8 +848,10 @@ bool operator<=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
  */
 template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
           class Alloc>
-bool operator>(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
-               const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+bool operator>(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & lhs,
+               const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & rhs) {
+  return rhs < lhs;
+}
 
 /*!
  * Equivalent to the expression `!(lhs < rhs)`.
@@ -849,8 +864,10 @@ bool operator>(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
  */
 template <class Vector3D, class Bounds3D, class T, class Contains, class Centre,
           class Alloc>
-bool operator>=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &,
-                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> &);
+bool operator>=(const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & lhs,
+                const map<Vector3D, Bounds3D, T, Contains, Centre, Alloc> & rhs) {
+  return !(lhs < rhs);
+}
 
 }       // namespace octree
 
