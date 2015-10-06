@@ -643,6 +643,32 @@ private:
     return node;
   }
 
+  /*!
+   * The root node (not a pointer since it will never be null).
+   */
+  octree_node<value_type> _root;
+
+  /*!
+   * The number of leaf nodes in the tree.
+   * Always greater than or equal to `1`.
+   */
+  std::size_t _n;
+
+  /*!
+   * Functor that tests whether a point is contained within a volume.
+   */
+  volume_contains _contains;
+
+  /*!
+   * Functor that calculates the centre of a volume.
+   */
+  volume_centre _centre;
+
+  /*!
+   * Memory allocator.
+   */
+  allocator_type _allocator;
+
 };
 
 /*!
