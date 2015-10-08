@@ -98,12 +98,6 @@ class map {
   template <class Value>
   struct octree_node {
 
-    octree_node(const Value & v, octree_node * p = nullptr) :
-        parent(p), value(v) {
-      for (int i = 0; i != 8; ++i)
-        children[i] = nullptr;
-    }
-
     /*! Pointers to parent node and children. */
     octree_node * parent, * children[8];
 
@@ -403,7 +397,9 @@ public:
   /*!
    * Destroys the octree map.
    */
-  ~map();
+  ~map() {
+    collapse(&_root);
+  }
 
 
   /*!
@@ -600,8 +596,12 @@ public:
    *
    * \param c  a cursor or iterator referencing the node to divide.
    */
-  void divide(cursor &);
-  void divide(iterator &);
+  void divide(cursor & c) {
+    divide(c._current);
+  }
+  void divide(iterator & i) {
+    divide(i._current);
+  }
 
   /*!
    * Collapses all child nodes of the node referenced by the cursor or iterator.
@@ -611,8 +611,12 @@ public:
    *
    * \param c  a cursor or iterator referencing the node to collapse.
    */
-  void collapse(cursor &);
-  void collapse(iterator &);
+  void collapse(cursor & c) {
+    collapse(c._current);
+  }
+  void collapse(iterator & i) {
+    collapse(i._current);
+  }
 
   /*!
    * Exchanges the content of the container by the content of `x`, which is
@@ -633,7 +637,9 @@ public:
   /*!
    * Removes all children of the root node, leaving this map with a size of `1`.
    */
-  void clear() noexcept;
+  void clear() noexcept {
+    collapse(&_root);
+  }
 
   /*!
    * Searches the map for a node containing the point `p` and returns an
@@ -758,6 +764,93 @@ private:
 
     // Return the (leaf) node containing the point
     return node;
+  }
+
+  typedef std::allocator_traits<allocator_type> allocator_traits;
+
+  typedef typename allocator_traits::template
+      rebind_alloc<octree_node<value_type>> node_allocator;
+
+  typedef std::allocator_traits<node_allocator> node_allocator_traits;
+
+  void divide(octree_node<value_type> * node) {
+    // Divide the parent bounds around the centre to calculate the bounds of the
+    // children
+    const volume_type parent = node->value.first;
+    const point_type centre = _centre(parent);
+
+    // Calculate the bounds in left-right, down-up, back-front order
+    const volume_type bounds[] = {
+      { parent.xmin(), centre.x(), parent.ymin(), centre.y(), parent.zmin(), centre.z() },
+      { centre.x(), parent.xmax(), parent.ymin(), centre.y(), parent.zmin(), centre.z() },
+      { parent.xmin(), centre.x(), centre.y(), parent.ymax(), parent.zmin(), centre.z() },
+      { centre.x(), parent.xmax(), centre.y(), parent.ymax(), parent.zmin(), centre.z() },
+      { parent.xmin(), centre.x(), parent.ymin(), centre.y(), centre.z(), parent.zmax() },
+      { centre.x(), parent.xmax(), parent.ymin(), centre.y(), centre.z(), parent.zmax() },
+      { parent.xmin(), centre.x(), centre.y(), parent.ymax(), centre.z(), parent.zmax() },
+      { centre.x(), parent.xmax(), centre.y(), parent.ymax(), centre.z(), parent.zmax() }
+    };
+
+    // Create an allocator for nodes
+    node_allocator allocator(_allocator);
+    for (int i = 0; i != 8; ++i) {
+      if (node->children[i] == nullptr) {
+        try {
+          // Allocate a child node using the node allocator
+          node->children[i] = node_allocator_traits::allocate(allocator, 1);
+          // Use placement new to create the node (using default-initialisation)
+          ::new(node->children[i]) octree_node<value_type>;
+          // Construct the value in the node using the value allocator
+          allocator_traits::construct(_allocator,
+                                      std::addressof(node->children[i]->value),
+                                      std::make_pair(bounds[i],
+                                                     node->value.second));
+          // Set the child node's parent and children
+          node->children[i]->parent = node;
+          for (int j = 0; j != 8; ++j)
+            node->children[i]->children[j] = nullptr;
+        } catch (...) {
+          // If any allocation/constructor threw destroy and deallocate all the
+          // children created so far
+          for (int j = 0; j != i; ++j) {
+            // Destroy the node value
+            allocator_traits::destroy(_allocator,
+                                      std::addressof(node->children[j]->value));
+            // Destroy and deallocate the node
+            node->children[j]->~octree_node<value_type>();
+            node_allocator_traits::deallocate(allocator, node->children[j], 1);
+            // Reset the parent's child to null
+            node->children[j] = nullptr;
+          }
+          // Destroy and deallocate the node that was being created when the
+          // value constructor threw
+          if (node->children[i]) {
+            node->children[i]->~octree_node<value_type>();
+            node_allocator_traits::deallocate(allocator, node->children[i], 1);
+          }
+          // Rethrow the original exception
+          throw;
+        }
+      }
+    }
+    _n += 7;
+  }
+
+  void collapse(octree_node<value_type> * node) {
+    // Create an allocator for nodes
+    node_allocator allocator(_allocator);
+    for (int i = 0; i != 8; ++i) {
+      if (node->children[i] != nullptr)
+        collapse(node->children[i]);
+      // Destroy each node value and node, then deallocate the node
+      node_allocator_traits::destroy(allocator,
+                                     std::addressof(node->children[i]->value));
+      node->children[i]->~octree_node<value_type>();
+      node_allocator_traits::deallocate(allocator, node->children[i], 1);
+      // Reset child to null
+      node->children[i] = nullptr;
+    }
+    _n -= 7;
   }
 
   /*!
