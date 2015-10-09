@@ -684,6 +684,26 @@ public:
     return _allocator;
   }
 
+  /*!
+   * Returns a copy of the function object used to calculate whether a point is
+   * within a volume.
+   *
+   * \return the function object
+   */
+  volume_contains volume_cont() const {
+    return _contains;
+  }
+
+  /*!
+   * Returns a copy of the function objects used to calculate the centre of a
+   * volume.
+   *
+   * \return the function object
+   */
+  volume_centre volume_cent() const {
+    return _centre;
+  }
+
 private:
 
   static octree_node<value_type> * first(octree_node<value_type> * node,
