@@ -347,11 +347,17 @@ public:
    * \param alloc          Allocator object.  The container keeps and uses an
    *                         internal copy of this object.
    */
-  explicit map(const volume_type & = volume_type(),
-               const mapped_type & = mapped_type(),
-               const volume_contains & = volume_contains(),
-               const volume_centre & = volume_centre(),
-               const allocator_type & = allocator_type());
+  explicit map(const volume_type & bounds = volume_type(),
+               const mapped_type & value = mapped_type(),
+               const volume_contains & contains = volume_contains(),
+               const volume_centre & centre = volume_centre(),
+               const allocator_type & alloc = allocator_type()) :
+      _n(1), _contains(contains), _centre(centre), _allocator(alloc) {
+    _allocator.construct(std::addressof(_root.value), bounds, value);
+    _root.parent = nullptr;
+    for (int i = 0; i != 8; ++i)
+      _root.children[i] = nullptr;
+  }
 
   /*!
    * Constructs a map with a copy of each of the elements in `x`.
@@ -361,8 +367,23 @@ public:
    * \param alloc  Allocator object.  The container keeps and uses an internal
    *                 copy of this object.
    */
-  map(const map &);
-  map(const map &, const allocator_type &);
+  map(const map & x) :
+    _n(x._n), _contains(x._contains), _centre(x._centre),
+    _allocator(std::allocator_traits<allocator_type>::
+               select_on_container_copy_construction(x._allocator)) {
+    _allocator.construct(std::addressof(_root.value), x._root.value);
+    _root.parent = nullptr;
+    for (int i = 0; i != 8; ++i)
+      _root.children[i] = copy(x._root.children[i], &_root);
+  }
+  map(const map & x, const allocator_type & alloc) :
+    _n(x._n), _contains(x._contains), _centre(x._centre),
+    _allocator(alloc) {
+    _allocator.construct(std::addressof(_root.value), x._root.value);
+    _root.parent = nullptr;
+    for (int i = 0; i != 8; ++i)
+      _root.children[i] = copy(x._root.children[i], &_root);
+  }
 
   /*!
    * Constructs a container that acquires the elements of x.  If `alloc` is
@@ -375,15 +396,54 @@ public:
    * \param alloc  Allocator object.  The container keeps and uses an internal
    *                 copy of this object.
    */
-  map(map &&);
-  map(map &&, const allocator_type &);
+  map(map && x) :
+    _n(x._n), _contains(std::move(x._contains)),
+    _centre(std::move(x._contains)), _allocator(std::move(x._allocator)) {
+    _allocator.construct(std::addressof(_root.value), std::move(x._root.value));
+    _root.parent = nullptr;
+    for (int i = 0; i != 8; ++i) {
+      _root.children[i] = x._root.children[i];
+      _root.children[i].parent = &_root;
+      x._root.children[i] = nullptr;
+    }
+  }
+  map(map && x, const allocator_type & alloc) :
+    _n(x._n), _contains(std::move(x._contains)),
+    _centre(std::move(x._contains)), _allocator(alloc) {
+    _allocator.construct(std::addressof(_root.value), std::move(x._root.value));
+    _root.parent = nullptr;
+    if (_allocator == x._allocator) {
+      for (int i = 0; i != 8; ++i) {
+        _root.children[i] = x._root.children[i];
+        _root.children[i].parent = &_root;
+        x._root.children[i] = nullptr;
+      }
+    }
+    else {
+      for (int i = 0; i != 8; ++i)
+        _root.children[i] = copy(x._root.children[i], &_root);
+    }
+  }
 
   /*!
    * Copies all the elements of `x` into this map.
    *
    * \param x  another map object of the same type, whose contents are copied
    */
-  map & operator=(const map &);
+  map & operator=(const map & x) {
+    if (*this != x) {
+      collapse(&_root);
+      _allocator.destroy(std::addressof(_root.value));
+      _n = x._n;
+      _contains = x._contains;
+      _centre = x._centre;
+      _allocator = x._allocator;
+      _allocator.construct(std::addressof(_root.value), x._root.value);
+      for (int i = 0; i != 8; ++i)
+        _root.children[i] = copy(x._root.children[i], &_root);
+    }
+    return *this;
+  }
 
   /*!
    * Moves the elements of `x` into this map.  `x` is left in an unspecified but
@@ -392,7 +452,22 @@ public:
    * \param x  another map object of the same type, whose contents are moved
    *             into this map
    */
-  map & operator=(const map &&);
+  map & operator=(map && x) {
+    if (*this != x) {
+      collapse(&_root);
+      _n = x._n;
+      _contains = std::move(x._contains);
+      _centre = std::move(x._centre);
+      _allocator = std::move(x._allocator);
+      _root.value = std::move(x._root.value);
+      for (int i = 0; i != 8; ++i) {
+        _root.children[i] = x._root.children[i];
+        _root.children[i].parent = &root;
+        x._root.children[i] = nullptr;
+      }
+    }
+    return *this;
+  }
 
   /*!
    * Destroys the octree map.
@@ -706,6 +781,13 @@ public:
 
 private:
 
+  typedef std::allocator_traits<allocator_type> allocator_traits;
+
+  typedef typename allocator_traits::template
+      rebind_alloc<octree_node<value_type>> node_allocator;
+
+  typedef std::allocator_traits<node_allocator> node_allocator_traits;
+
   static octree_node<value_type> * first(octree_node<value_type> * node,
                                          std::stack<std::size_t> & path) {
     while (node->children[0] != nullptr) {
@@ -722,6 +804,53 @@ private:
       path.push(7);
     }
     return node;
+  }
+
+  octree_node<value_type> * copy(const octree_node<value_type> * node,
+                                 octree_node<value_type> * parent) {
+    if (node == nullptr)
+      return nullptr;
+
+    // Create an allocator for nodes
+    node_allocator allocator(_allocator);
+
+    octree_node<value_type> * res = nullptr;
+    try {
+      // Allocate the node using the node allocator
+      res = node_allocator_traits::allocate(allocator, 1);
+      // Construct the value in the node using the value allocator
+      allocator_traits::construct(_allocator, std::addressof(res->value),
+                                  node->value);
+      // Set the node's parent
+      res->parent = parent;
+    } catch (...) {
+      // Deallocate the node
+      if (res != nullptr)
+        node_allocator_traits::deallocate(allocator, res, 1);
+      // Rethrow the original exception
+      throw;
+    }
+
+    // Copy the children recursively setting their parent to the new node
+    for (int i = 0; i != 8; ++i) {
+      try {
+        res->children[i] = copy(node->children[i], res);
+      } catch (...) {
+        // Destroy the children created so far
+        for (int j = 0; j != i; ++j) {
+          allocator_traits::destroy(_allocator,
+                                    std::addressof(res->children[j]->value));
+          node_allocator_traits::deallocate(allocator, res->children[j], 1);
+        }
+        // Destroy and deallocate the node
+        allocator_traits::destroy(_allocator, std::addressof(res->value));
+        node_allocator_traits::deallocate(allocator, res, 1);
+        // Rethrow the original exception
+        throw;
+      }
+    }
+
+    return res;
   }
 
   octree_node<value_type> * locate(const point_type & point,
@@ -786,13 +915,6 @@ private:
     return node;
   }
 
-  typedef std::allocator_traits<allocator_type> allocator_traits;
-
-  typedef typename allocator_traits::template
-      rebind_alloc<octree_node<value_type>> node_allocator;
-
-  typedef std::allocator_traits<node_allocator> node_allocator_traits;
-
   void divide(octree_node<value_type> * node) {
     // Divide the parent bounds around the centre to calculate the bounds of the
     // children
@@ -818,13 +940,10 @@ private:
         try {
           // Allocate a child node using the node allocator
           node->children[i] = node_allocator_traits::allocate(allocator, 1);
-          // Use placement new to create the node (using default-initialisation)
-          ::new(node->children[i]) octree_node<value_type>;
           // Construct the value in the node using the value allocator
           allocator_traits::construct(_allocator,
                                       std::addressof(node->children[i]->value),
-                                      std::make_pair(bounds[i],
-                                                     node->value.second));
+                                      bounds[i], node->value.second);
           // Set the child node's parent and children
           node->children[i]->parent = node;
           for (int j = 0; j != 8; ++j)
@@ -836,18 +955,14 @@ private:
             // Destroy the node value
             allocator_traits::destroy(_allocator,
                                       std::addressof(node->children[j]->value));
-            // Destroy and deallocate the node
-            node->children[j]->~octree_node<value_type>();
             node_allocator_traits::deallocate(allocator, node->children[j], 1);
             // Reset the parent's child to null
             node->children[j] = nullptr;
           }
           // Destroy and deallocate the node that was being created when the
           // value constructor threw
-          if (node->children[i]) {
-            node->children[i]->~octree_node<value_type>();
+          if (node->children[i] != nullptr)
             node_allocator_traits::deallocate(allocator, node->children[i], 1);
-          }
           // Rethrow the original exception
           throw;
         }
@@ -860,15 +975,15 @@ private:
     // Create an allocator for nodes
     node_allocator allocator(_allocator);
     for (int i = 0; i != 8; ++i) {
-      if (node->children[i] != nullptr)
+      if (node->children[i] != nullptr) {
         collapse(node->children[i]);
-      // Destroy each node value and node, then deallocate the node
-      node_allocator_traits::destroy(allocator,
-                                     std::addressof(node->children[i]->value));
-      node->children[i]->~octree_node<value_type>();
-      node_allocator_traits::deallocate(allocator, node->children[i], 1);
-      // Reset child to null
-      node->children[i] = nullptr;
+        // Destroy each node value and node, then deallocate the node
+        node_allocator_traits::destroy(allocator,
+                                       std::addressof(node->children[i]->value));
+        node_allocator_traits::deallocate(allocator, node->children[i], 1);
+        // Reset child to null
+        node->children[i] = nullptr;
+      }
     }
     _n -= 7;
   }
