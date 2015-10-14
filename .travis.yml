@@ -1,0 +1,43 @@
+language: cpp
+script: make && make test
+branches:
+  only:
+    - master
+compiler:
+  - gcc
+  - clang
+os:
+  - linux
+  - osx
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+      - llvm-toolchain-precise-3.6
+    packages:
+      - gcc-4.8
+      - g++-4.8
+      - clang-3.6
+before_install:
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then brew update; fi
+install: |
+  if [ "${TRAVIS_OS_NAME}" = "linux" ]
+  then
+    if [ "${CC}" = "gcc" ] || [ "${CXX}" = "g++" ]
+    then
+      export CC="gcc-4.8"
+      export CXX="g++-4.8"
+    elif [ "${CC}" = "clang" ] || [ "${CXX}" = "clang++" ]
+    then
+      export CC="clang-3.6"
+      export CXX="clang++-3.6"
+    fi
+  elif [ "${TRAVIS_OS_NAME}" = "osx" ]
+  then
+    if [ "${CC}" = "gcc" ] || [ "${CXX}" = "g++" ]
+    then
+      brew list gcc48 || brew install gcc48
+      export CC="gcc-4.8"
+      export CXX="g++-4.8"
+    fi
+  fi
