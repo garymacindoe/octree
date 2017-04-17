@@ -971,6 +971,188 @@ private:
     _n -= 7;
   }
 
+  octree_node<value_type> * copy(const octree_node<value_type> * node,
+                                 octree_node<value_type> * parent) {
+    if (node == nullptr)
+      return nullptr;
+
+    // Create an allocator for nodes
+    node_allocator allocator(_allocator);
+
+    octree_node<value_type> * res = nullptr;
+    try {
+      // Allocate the node using the node allocator
+      res = node_allocator_traits::allocate(allocator, 1);
+      // Construct the value in the node using the value allocator
+      allocator_traits::construct(_allocator, std::addressof(res->value),
+                                  node->value);
+      // Set the node's parent
+      res->parent = parent;
+    } catch (...) {
+      // Deallocate the node
+      if (res != nullptr)
+        node_allocator_traits::deallocate(allocator, res, 1);
+      // Rethrow the original exception
+      throw;
+    }
+
+    // Copy the children recursively setting their parent to the new node
+    for (int i = 0; i != 8; ++i) {
+      try {
+        res->children[i] = copy(node->children[i], res);
+      } catch (...) {
+        // Destroy the children created so far
+        for (int j = 0; j != i; ++j) {
+          allocator_traits::destroy(_allocator,
+                                    std::addressof(res->children[j]->value));
+          node_allocator_traits::deallocate(allocator, res->children[j], 1);
+        }
+        // Destroy and deallocate the node
+        allocator_traits::destroy(_allocator, std::addressof(res->value));
+        node_allocator_traits::deallocate(allocator, res, 1);
+        // Rethrow the original exception
+        throw;
+      }
+    }
+
+    return res;
+  }
+
+  octree_node<value_type> * locate(const point_type & point,
+                                   std::stack<std::size_t> & path) const {
+    // If the point is not contained in the bounds of the root node it's not
+    // going to be in any of the sub-nodes either
+    if (!_contains(_root.value.first, point))
+      return nullptr;
+
+    // While node is not a leaf (if the first child is null they're all null)
+    octree_node<value_type> * node = &_root;
+    while (node->children[0] != nullptr) {
+      // Find centre of node
+      const Vector3D centre = _centre(node->value.first);
+
+      // Work out the index of the octant in which the point lies
+      std::size_t i = 0;
+      if (point.x() >= centre.x())
+        i |= 1;
+      if (point.y() >= centre.y())
+        i |= 1 << 1;
+      if (point.z() >= centre.z())
+        i |= 1 << 2;
+
+      // Go to the correct child octant
+      node = node->children[i];
+
+      // Update the path taken
+      path.push(i);
+    }
+
+    // Return the (leaf) node containing the point
+    return node;
+  }
+
+  octree_node<value_type> * locate(const point_type & point) const {
+    // If the point is not contained in the bounds of the root node it's not
+    // going to be in any of the sub-nodes either
+    if (!_contains(_root.value.first, point))
+      return nullptr;
+
+    // While node is not a leaf (if the first child is null they're all null)
+    octree_node<value_type> * node = &_root;
+    while (node->children[0] != nullptr) {
+      // Find centre of node
+      const Vector3D centre = _centre(node->value.first);
+
+      // Work out the index of the octant in which the point lies
+      std::size_t i = 0;
+      if (point.x() >= centre.x())
+        i |= 1;
+      if (point.y() >= centre.y())
+        i |= 1 << 1;
+      if (point.z() >= centre.z())
+        i |= 1 << 2;
+
+      // Go to the correct child octant
+      node = node->children[i];
+    }
+
+    // Return the (leaf) node containing the point
+    return node;
+  }
+
+  void divide(octree_node<value_type> * node) {
+    // Divide the parent bounds around the centre to calculate the bounds of the
+    // children
+    const volume_type parent = node->value.first;
+    const point_type centre = _centre(parent);
+
+    // Calculate the bounds in left-right, down-up, back-front order
+    const volume_type bounds[] = {
+      { parent.xmin(), centre.x(), parent.ymin(), centre.y(), parent.zmin(), centre.z() },
+      { centre.x(), parent.xmax(), parent.ymin(), centre.y(), parent.zmin(), centre.z() },
+      { parent.xmin(), centre.x(), centre.y(), parent.ymax(), parent.zmin(), centre.z() },
+      { centre.x(), parent.xmax(), centre.y(), parent.ymax(), parent.zmin(), centre.z() },
+      { parent.xmin(), centre.x(), parent.ymin(), centre.y(), centre.z(), parent.zmax() },
+      { centre.x(), parent.xmax(), parent.ymin(), centre.y(), centre.z(), parent.zmax() },
+      { parent.xmin(), centre.x(), centre.y(), parent.ymax(), centre.z(), parent.zmax() },
+      { centre.x(), parent.xmax(), centre.y(), parent.ymax(), centre.z(), parent.zmax() }
+    };
+
+    // Create an allocator for nodes
+    node_allocator allocator(_allocator);
+    for (int i = 0; i != 8; ++i) {
+      if (node->children[i] == nullptr) {
+        try {
+          // Allocate a child node using the node allocator
+          node->children[i] = node_allocator_traits::allocate(allocator, 1);
+          // Construct the value in the node using the value allocator
+          allocator_traits::construct(_allocator,
+                                      std::addressof(node->children[i]->value),
+                                      bounds[i], node->value.second);
+          // Set the child node's parent and children
+          node->children[i]->parent = node;
+          for (int j = 0; j != 8; ++j)
+            node->children[i]->children[j] = nullptr;
+        } catch (...) {
+          // If any allocation/constructor threw destroy and deallocate all the
+          // children created so far
+          for (int j = 0; j != i; ++j) {
+            // Destroy the node value
+            allocator_traits::destroy(_allocator,
+                                      std::addressof(node->children[j]->value));
+            node_allocator_traits::deallocate(allocator, node->children[j], 1);
+            // Reset the parent's child to null
+            node->children[j] = nullptr;
+          }
+          // Destroy and deallocate the node that was being created when the
+          // value constructor threw
+          if (node->children[i] != nullptr)
+            node_allocator_traits::deallocate(allocator, node->children[i], 1);
+          // Rethrow the original exception
+          throw;
+        }
+      }
+    }
+    _n += 7;
+  }
+
+  void collapse(octree_node<value_type> * node) {
+    // Create an allocator for nodes
+    node_allocator allocator(_allocator);
+    for (int i = 0; i != 8; ++i) {
+      if (node->children[i] != nullptr) {
+        collapse(node->children[i]);
+        // Destroy each node value and node, then deallocate the node
+        node_allocator_traits::destroy(allocator,
+                                       std::addressof(node->children[i]->value));
+        node_allocator_traits::deallocate(allocator, node->children[i], 1);
+        // Reset child to null
+        node->children[i] = nullptr;
+      }
+    }
+    _n -= 7;
+  }
+
   /*!
    * The root node (not a pointer since it will never be null).
    */
